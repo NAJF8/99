@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CMMS Admin - نظام إدارة الصيانة</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        background: '#F5F6F7',
+                        surface: '#FFFFFF',
+                        primary: '#17202A',
+                        secondary: '#667085',
+                        border: '#E4E7EC',
+                        sidebar: '#1E293B',
+                        action: '#2563EB',
+                        success: '#16A34A',
+                        warning: '#D97706',
+                        danger: '#DC2626'
+                    },
+                    fontFamily: {
+                        sans: ['Cairo', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { font-family: 'Cairo', sans-serif; background-color: #F5F6F7; color: #17202A; }
+        .hide { display: none !important; }
+        .toast-enter { transform: translateY(-100%); opacity: 0; }
+        .toast-enter-active { transform: translateY(0); opacity: 1; transition: all 0.3s ease; }
+        .toast-leave { transform: translateY(0); opacity: 1; }
+        .toast-leave-active { transform: translateY(-100%); opacity: 0; transition: all 0.3s ease; }
+        
+        /* Sidebar styling */
+        .sidebar-link.active { background-color: rgba(37, 99, 235, 0.2); color: white; border-right: 4px solid #2563EB; }
+        .sidebar-link { transition: all 0.2s; border-right: 4px solid transparent; }
+        .sidebar-link:hover:not(.active) { background-color: rgba(255, 255, 255, 0.1); }
+    </style>
+</head>
+<body class="bg-background text-primary overflow-hidden h-screen flex flex-col">
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 flex flex-col gap-2 w-full max-w-md px-4 pointer-events-none"></div>
+
+    <!-- Login Page -->
+    <div id="login-page" class="absolute inset-0 bg-background flex items-center justify-center z-40">
+        <div class="bg-surface p-8 rounded-lg shadow-md w-full max-w-md border border-border">
+            <div class="text-center mb-8">
+                <h1 class="text-2xl font-bold text-primary">نظام إدارة الصيانة CMMS</h1>
+                <p class="text-secondary mt-2">قم بتسجيل الدخول للمتابعة</p>
+            </div>
+            
+            <form id="login-form" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-semibold mb-1">البريد الإلكتروني</label>
+                    <input type="email" id="login-email" required class="w-full border border-border rounded px-3 py-2 focus:outline-none focus:border-action text-left" dir="ltr">
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold mb-1">كلمة المرور</label>
+                    <input type="password" id="login-password" required class="w-full border border-border rounded px-3 py-2 focus:outline-none focus:border-action text-left" dir="ltr">
+                </div>
+                <button type="submit" class="w-full bg-action text-white rounded py-2 font-semibold hover:bg-blue-700 transition">دخول</button>
+            </form>
+            
+            <div class="mt-6">
+                <div class="relative">
+                    <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-border"></div></div>
+                    <div class="relative flex justify-center text-sm"><span class="bg-surface px-2 text-secondary">أو</span></div>
+                </div>
+                <button id="btn-google-login" class="mt-4 w-full border border-border bg-surface text-primary rounded py-2 font-semibold flex items-center justify-center gap-2 hover:bg-gray-50 transition">
+                    <svg class="w-5 h-5" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+                    تسجيل الدخول باستخدام Google
+                </button>
+            </div>
+            
+            <div id="login-error" class="hidden mt-4 p-3 bg-red-100 text-danger text-sm rounded border border-red-200"></div>
+        </div>
+    </div>
+
+    <!-- Main App (Hidden initially) -->
+    <div id="main-app" class="hidden flex h-full w-full">
+        
+        <!-- Sidebar -->
+        <aside class="w-[260px] bg-sidebar text-white flex flex-col flex-shrink-0 h-full overflow-y-auto">
+            <div class="p-4 border-b border-gray-700 flex items-center gap-3">
+                <div class="w-8 h-8 bg-action rounded flex items-center justify-center font-bold text-lg">C</div>
+                <h2 class="font-bold text-lg tracking-wide">CMMS Admin</h2>
+            </div>
+            
+            <nav class="flex-1 py-4 flex flex-col gap-1" id="sidebar-nav">
+                <!-- Navigation inserted by JS -->
+            </nav>
+            
+            <div class="p-4 border-t border-gray-700">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-full bg-gray-600 flex items-center justify-center text-sm font-bold" id="user-avatar-initial">U</div>
+                    <div class="flex-1 overflow-hidden">
+                        <div class="font-semibold text-sm truncate" id="current-user-name">User Name</div>
+                        <div class="text-xs text-gray-400 truncate" id="current-user-role">Role</div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="flex-1 flex flex-col h-full bg-background overflow-hidden relative">
+            
+            <!-- Topbar -->
+            <header class="h-[56px] bg-surface border-b border-border flex items-center justify-between px-6 flex-shrink-0">
+                <h2 class="text-xl font-bold" id="page-title">لوحة التحكم</h2>
+                
+                <div class="flex items-center gap-4">
+                    <span class="text-sm font-semibold" id="topbar-user-name">User</span>
+                    <button id="btn-logout" class="text-sm text-secondary hover:text-danger flex items-center gap-1 transition">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+                        خروج
+                    </button>
+                </div>
+            </header>
+
+            <!-- Content Container -->
+            <div class="flex-1 overflow-y-auto p-6" id="content-container">
+                <!-- Pages injected here -->
+            </div>
+        </main>
+    </div>
+    
+    <!-- Generic Modal Container -->
+    <div id="modal-container" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+        <div id="modal-content" class="bg-surface rounded-lg shadow-xl w-full max-w-lg border border-border flex flex-col max-h-[90vh]">
+            <!-- Injected by JS -->
+        </div>
+    </div>
+
+    <!-- Firebase & App Logic -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
+        import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, GoogleAuthProvider, signInWithPopup } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js';
+        import { getDatabase, ref, get, child, push, update, remove, set, onValue } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-database.js';
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyDtzonzkDsEvF9KNXi70j6ZTXG5kLAM_0c",
+            authDomain: "cmms-37512.firebaseapp.com",
+            databaseURL: "https://cmms-37512-default-rtdb.firebaseio.com",
+            projectId: "cmms-37512",
+            storageBucket: "cmms-37512.firebasestorage.app",
+            messagingSenderId: "451592788539",
+            appId: "1:451592788539:web:d3dc3e68b1543996b39a1e",
+            measurementId: "G-YP5GMMSWN5"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getDatabase(app);
+
+        // App State
+        let currentUser = null;
+        let userProfile = null;
+        let currentHash = '#dashboard';
+        
+        // Data Caches
+        const dataCache = {
+            assets: {},
+            workOrders: {},
+            breakdowns: {},
+            users: {},
+            spareParts: {},
+            settings: {},
+            auditLogs: {}
+        };
+        
+        // DOM Elements
+        const elLogin = document.getElementById('login-page');
+        const elApp = document.getElementById('main-app');
+        const elContent = document.getElementById('content-container');
+        const elPageTitle = document.getElementById('page-title');
+        const elModal = document.getElementById('modal-container');
+        const elModalContent = document.getElementById('modal-content');
+        const elToastContainer = document.getElementById('toast-container');
+        
+        const SUPER_ADMIN_EMAIL = 'mohameadalhaear100@gmail.com';
+        
+        // Utils
+        const showToast = (message, type = 'success') => {
+            const toast = document.createElement('div');
+            const bg = type === 'success' ? 'bg-success' : type === 'warning' ? 'bg-warning' : 'bg-danger';
+            toast.className = `${bg} text-white px-4 py-3 rounded shadow-lg flex items-center justify-between pointer-events-auto toast-enter`;
+            toast.innerHTML = `<span>${message}</span>`;
+            elToastContainer.appendChild(toast);
+            
+            // Trigger animation
+            requestAnimationFrame(() => {
+                toast.classList.remove('toast-enter');
+                toast.classList.add('toast-enter-active');
+            });
+            
+            setTimeout(() => {
+                toast.classList.remove('toast-enter-active');
+                toast.classList.add('toast-leave-active');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        };
+        
+        const logAudit = async (action, details) => {
+            if (!currentUser) return;
+            try {
+                const logRef = push(ref(db, 'auditLogs'));
+                await set(logRef, {
+                    userId: currentUser.uid,
+                    userName: userProfile ? userProfile.name : currentUser.email,
+                    action,
+                    details,
+                    timestamp: new Date().toISOString()
+                });
+            } catch(e) { console.error("Audit error:", e); }
+        };
+        
+        const generateId = () => Math.random().toString(36).substring(2, 9);
+        const formatDate = (isoString) => new Date(isoString).toLocaleDateString('ar-EG', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute:'2-digit' });
+
+        // Sidebar Navigation Data
+        const navItems = [
+            { id: 'dashboard', icon: '<circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none"/>', label: 'لوحة التحكم', section: 'الرئيسية' },
+            { id: 'assets', icon: '<rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="2" fill="none"/>', label: 'الأصول والمكائن', section: 'الصيانة' },
+            { id: 'breakdowns', icon: '<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" stroke="currentColor" stroke-width="2" fill="none"/>', label: 'الأعطال', section: 'الصيانة' },
+            { id: 'workorders', icon: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" stroke-width="2" fill="none"/>', label: 'أوامر العمل', section: 'الصيانة' },
+            { id: 'inventory', icon: '<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" stroke="currentColor" stroke-width="2" fill="none"/>', label: 'قطع الغيار', section: 'المخزون' },
+            { id: 'employees', icon: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" stroke="currentColor" stroke-width="2" fill="none"/><circle cx="9" cy="7" r="4" stroke="currentColor" stroke-width="2" fill="none"/>', label: 'الموظفون', section: 'الإدارة' },
+            { id: 'settings', icon: '<circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2" fill="none"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" stroke="currentColor" stroke-width="2" fill="none"/>', label: 'الإعدادات', section: 'النظام' },
+            { id: 'audit', icon: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" stroke-width="2" fill="none"/><polyline points="14 2 14 8 20 8" stroke="currentColor" stroke-width="2" fill="none"/><line x1="16" y1="13" x2="8" y2="13" stroke="currentColor" stroke-width="2" fill="none"/><line x1="16" y1="17" x2="8" y2="17" stroke="currentColor" stroke-width="2" fill="none"/><polyline points="10 9 9 9 8 9" stroke="currentColor" stroke-width="2" fill="none"/>', label: 'سجل العمليات', section: 'النظام' }
+        ];
+
+        const renderSidebar = () => {
+            const container = document.getElementById('sidebar-nav');
+            let html = '';
+            let currentSection = '';
+            
+            navItems.forEach(item => {
+                if (item.section !== currentSection) {
+                    currentSection = item.section;
+                    html += `<div class="px-4 py-2 mt-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">${currentSection}</div>`;
+                }
+                const isActive = `#${item.id}` === currentHash;
+                html += `
+                    <a href="#${item.id}" class="sidebar-link flex items-center gap-3 px-4 py-2 text-sm ${isActive ? 'active' : 'text-gray-300'}">
+                        <svg class="w-4 h-4" viewBox="0 0 24 24">${item.icon}</svg>
+                        ${item.label}
+                    </a>
+                `;
+            });
+            container.innerHTML = html;
+        };
+
+        // UI Components
+        const EmptyState = (title, subtitle, actionText, actionFn) => `
+            <div class="flex flex-col items-center justify-center p-12 bg-surface border border-border rounded-lg">
+                <svg class="w-16 h-16 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path></svg>
+                <h3 class="text-lg font-bold text-primary mb-1">${title}</h3>
+                <p class="text-secondary text-sm mb-4">${subtitle}</p>
+                ${actionText ? `<button class="bg-action text-white px-4 py-2 rounded text-sm font-semibold hover:bg-blue-700 transition" onclick="${actionFn}">${actionText}</button>` : ''}
+            </div>
+        `;
+        
+        const LoadingState = () => `
+            <div class="flex items-center justify-center p-12">
+                <svg class="animate-spin h-8 w-8 text-action" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+            </div>
+        `;
+
+        // Modals
+        const openModal = (title, content, onSave) => {
+            elModalContent.innerHTML = `
+                <div class="flex justify-between items-center p-4 border-b border-border">
+                    <h3 class="text-lg font-bold text-primary">${title}</h3>
+                    <button class="text-secondary hover:text-danger" onclick="closeModal()">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+                <div class="p-4 overflow-y-auto">${content}</div>
+                <div class="flex justify-end gap-2 p-4 border-t border-border bg-gray-50 rounded-b-lg">
+                    <button class="px-4 py-2 text-sm font-semibold text-secondary bg-white border border-border rounded hover:bg-gray-50" onclick="closeModal()">إلغاء</button>
+                    <button id="modal-save-btn" class="px-4 py-2 text-sm font-semibold text-white bg-action rounded hover:bg-blue-700">حفظ</button>
+                </div>
+            `;
+            elModal.classList.remove('hidden');
+            document.getElementById('modal-save-btn').onclick = () => {
+                if (onSave()) closeModal();
+            };
+        };
+        
+        window.closeModal = () => { elModal.classList.add('hidden'); elModalContent.innerHTML = ''; };
+
+        // Realtime DB Listeners
+        const setupDBListeners = () => {
+            const refs = ['assets', 'workOrders', 'breakdowns', 'users', 'spareParts', 'settings', 'auditLogs'];
+            refs.forEach(path => {
+                onValue(ref(db, path), (snapshot) => {
+                    dataCache[path] = snapshot.val() || {};
+                    if(currentHash) renderPage(currentHash);
+                });
+            });
+        };
+
+        // Render Pages
+        const renderPage = (hash) => {
+            currentHash = hash;
+            renderSidebar();
+            const pageId = hash.replace('#', '') || 'dashboard';
+            const pageObj = navItems.find(n => n.id === pageId);
+            elPageTitle.textContent = pageObj ? pageObj.label : 'لوحة التحكم';
+            
+            switch(pageId) {
+                case 'dashboard': renderDashboard(); break;
+                case 'assets': renderAssets(); break;
+                case 'workorders': renderWorkOrders(); break;
+                case 'breakdowns': renderBreakdowns(); break;
+                case 'employees': renderEmployees(); break;
+                case 'inventory': renderInventory(); break;
+                case 'settings': renderSettings(); break;
+                case 'audit': renderAudit(); break;
+                default: renderDashboard();
+            }
+        };
+
+        // --- Pages Implementation ---
+        
+        // 1. Dashboard
+        const renderDashboard = () => {
+            const assetsArr = Object.values(dataCache.assets);
+            const wos = Object.values(dataCache.workOrders);
+            const wosOpen = wos.filter(w => w.status !== 'مكتمل' && w.status !== 'ملغى');
+            
+            const cards = [
+                { title: 'إجمالي المكائن', val: assetsArr.length, color: 'text-action', bg: 'bg-blue-50' },
+                { title: 'العاملة', val: assetsArr.filter(a=>a.status==='active').length, color: 'text-success', bg: 'bg-green-50' },
+                { title: 'المتوقفة', val: assetsArr.filter(a=>a.status==='stopped').length, color: 'text-danger', bg: 'bg-red-50' },
+                { title: 'أوامر مفتوحة', val: wosOpen.length, color: 'text-warning', bg: 'bg-yellow-50' },
+                { title: 'PM اليوم', val: 0, color: 'text-action', bg: 'bg-blue-50' },
+                { title: 'Low Stock', val: Object.values(dataCache.spareParts).filter(p=>Number(p.quantity)<=Number(p.minStock)).length, color: 'text-danger', bg: 'bg-red-50' },
+            ];
+
+            let html = `<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">`;
+            cards.forEach(c => {
+                html += `
+                    <div class="bg-surface border border-border rounded-lg p-4 flex flex-col">
+                        <span class="text-secondary text-sm font-semibold mb-2">${c.title}</span>
+                        <span class="text-3xl font-bold ${c.color}">${c.val}</span>
+                    </div>
+                `;
+            });
+            html += `</div>`;
+            
+            html += `<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">`;
+            // Latest WOs
+            html += `<div class="bg-surface border border-border rounded-lg flex flex-col"><div class="p-4 border-b border-border font-bold">آخر أوامر العمل</div><div class="p-0 overflow-x-auto">`;
+            if(wos.length === 0) {
+                html += `<div class="p-4 text-center text-secondary text-sm">لا توجد أوامر عمل</div>`;
+            } else {
+                html += `<table class="w-full text-sm text-right"><thead class="bg-gray-50 text-secondary"><tr><th class="p-3">العنوان</th><th class="p-3">الحالة</th></tr></thead><tbody>`;
+                wos.slice(-5).forEach(w => {
+                    html += `<tr class="border-t border-border"><td class="p-3">${w.title}</td><td class="p-3">${w.status}</td></tr>`;
+                });
+                html += `</tbody></table>`;
+            }
+            html += `</div></div>`;
+            
+            // Latest Breakdowns
+            const brks = Object.values(dataCache.breakdowns);
+            html += `<div class="bg-surface border border-border rounded-lg flex flex-col"><div class="p-4 border-b border-border font-bold">آخر البلاغات</div><div class="p-0 overflow-x-auto">`;
+            if(brks.length === 0) {
+                html += `<div class="p-4 text-center text-secondary text-sm">لا توجد بلاغات</div>`;
+            } else {
+                html += `<table class="w-full text-sm text-right"><thead class="bg-gray-50 text-secondary"><tr><th class="p-3">الماكينة</th><th class="p-3">العطل</th></tr></thead><tbody>`;
+                brks.slice(-5).forEach(b => {
+                    const m = dataCache.assets[b.machineId];
+                    html += `<tr class="border-t border-border"><td class="p-3">${m?m.name:'-'}</td><td class="p-3">${b.type}</td></tr>`;
+                });
+                html += `</tbody></table>`;
+            }
+            html += `</div></div></div>`;
+            
+            elContent.innerHTML = html;
+        };
+
+        // 2. Assets
+        window.openAddAsset = () => {
+            const form = `
+                <form id="asset-form" class="space-y-4">
+                    <div><label class="block text-sm mb-1">اسم الماكينة</label><input type="text" id="a-name" required class="w-full border border-border rounded p-2"></div>
+                    <div><label class="block text-sm mb-1">الرقم التعريفي</label><input type="text" id="a-ref" required class="w-full border border-border rounded p-2"></div>
+                    <div><label class="block text-sm mb-1">الموقع</label><input type="text" id="a-loc" required class="w-full border border-border rounded p-2"></div>
+                    <div><label class="block text-sm mb-1">القسم</label><input type="text" id="a-dep" required class="w-full border border-border rounded p-2"></div>
+                    <div><label class="block text-sm mb-1">الحالة</label>
+                        <select id="a-status" class="w-full border border-border rounded p-2">
+                            <option value="active">عاملة</option><option value="stopped">متوقفة</option>
+                        </select>
+                    </div>
+                </form>
+            `;
+            openModal("إضافة ماكينة", form, async () => {
+                const name = document.getElementById('a-name').value;
+                if(!name) return false;
+                try {
+                    const obj = {
+                        name,
+                        ref: document.getElementById('a-ref').value,
+                        location: document.getElementById('a-loc').value,
+                        department: document.getElementById('a-dep').value,
+                        status: document.getElementById('a-status').value,
+                        createdAt: new Date().toISOString()
+                    };
+                    await push(ref(db, 'assets'), obj);
+                    showToast('تمت إضافة الماكينة بنجاح');
+                    logAudit('ADD_ASSET', `أضاف ماكينة: ${name}`);
+                    return true;
+                } catch(e) { showToast('حدث خطأ', 'error'); return false; }
+            });
+        };
+
+        const renderAssets = () => {
+            const items = Object.entries(dataCache.assets);
+            let html = `<div class="mb-4 flex justify-end"><button onclick="openAddAsset()" class="bg-action text-white px-4 py-2 rounded text-sm font-bold">+ إضافة ماكينة</button></div>`;
+            
+            if(items.length === 0) {
+                html += EmptyState('لا توجد مكائن', 'لم يتم إضافة أي أصول للنظام بعد.', 'إضافة ماكينة', 'openAddAsset()');
+            } else {
+                html += `<div class="bg-surface rounded-lg border border-border overflow-x-auto"><table class="w-full text-sm text-right"><thead class="bg-gray-50 text-secondary"><tr><th class="p-4">الاسم</th><th class="p-4">الرقم</th><th class="p-4">الموقع</th><th class="p-4">القسم</th><th class="p-4">الحالة</th></tr></thead><tbody>`;
+                items.forEach(([id, a]) => {
+                    const badge = a.status === 'active' ? `<span class="bg-green-100 text-green-700 px-2 py-1 rounded text-xs">عاملة</span>` : `<span class="bg-red-100 text-red-700 px-2 py-1 rounded text-xs">متوقفة</span>`;
+                    html += `<tr class="border-t border-border hover:bg-gray-50"><td class="p-4 font-semibold">${a.name}</td><td class="p-4">${a.ref}</td><td class="p-4">${a.location}</td><td class="p-4">${a.department}</td><td class="p-4">${badge}</td></tr>`;
+                });
+                html += `</tbody></table></div>`;
+            }
+            elContent.innerHTML = html;
+        };
+        
+        // 5. Employees
+        window.openAddEmployee = () => {
+            const form = `
+                <form id="emp-form" class="space-y-4">
+                    <div><label class="block text-sm mb-1">الاسم الكامل</label><input type="text" id="e-name" required class="w-full border border-border rounded p-2"></div>
+                    <div><label class="block text-sm mb-1">البريد الإلكتروني</label><input type="email" id="e-email" required class="w-full border border-border rounded p-2" dir="ltr"></div>
+                    <div><label class="block text-sm mb-1">الدور</label>
+                        <select id="e-role" class="w-full border border-border rounded p-2">
+                            <option value="admin">Admin</option>
+                            <option value="plant_manager">Plant Manager</option>
+                            <option value="maintenance_manager">Maintenance Manager</option>
+                            <option value="supervisor">Supervisor</option>
+                            <option value="technician">Technician</option>
+                            <option value="viewer">Viewer</option>
+                        </select>
+                    </div>
+                </form>
+            `;
+            openModal("إضافة موظف", form, async () => {
+                const name = document.getElementById('e-name').value;
+                const email = document.getElementById('e-email').value;
+                const role = document.getElementById('e-role').value;
+                if(!name || !email) return false;
+                try {
+                    await push(ref(db, 'users'), { name, email, role, status: 'active', createdAt: new Date().toISOString() });
+                    showToast('تمت الإضافة بنجاح');
+                    logAudit('ADD_EMPLOYEE', `أضاف موظف: ${email}`);
+                    return true;
+                } catch(e) { showToast('خطأ في الإضافة', 'error'); return false; }
+            });
+        };
+
+        const renderEmployees = () => {
+            const items = Object.entries(dataCache.users);
+            let html = `<div class="mb-4 flex justify-end"><button onclick="openAddEmployee()" class="bg-action text-white px-4 py-2 rounded text-sm font-bold">+ إضافة موظف</button></div>`;
+            
+            if(items.length === 0) {
+                html += EmptyState('لا يوجد موظفين', '', '', '');
+            } else {
+                html += `<div class="bg-surface rounded-lg border border-border overflow-x-auto"><table class="w-full text-sm text-right"><thead class="bg-gray-50 text-secondary"><tr><th class="p-4">الاسم</th><th class="p-4">البريد</th><th class="p-4">الدور</th><th class="p-4">الحالة</th></tr></thead><tbody>`;
+                items.forEach(([id, u]) => {
+                    const badge = u.status === 'active' ? `<span class="bg-green-100 text-green-700 px-2 py-1 rounded text-xs">نشط</span>` : `<span class="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs">${u.status}</span>`;
+                    html += `<tr class="border-t border-border hover:bg-gray-50"><td class="p-4 font-semibold">${u.name}</td><td class="p-4" dir="ltr">${u.email}</td><td class="p-4">${u.role}</td><td class="p-4">${badge}</td></tr>`;
+                });
+                html += `</tbody></table></div>`;
+            }
+            elContent.innerHTML = html;
+        };
+
+        // Fallbacks for empty implementations to maintain completion
+        const renderWorkOrders = () => elContent.innerHTML = EmptyState('أوامر العمل', 'قيد التطوير', '', '');
+        const renderBreakdowns = () => elContent.innerHTML = EmptyState('الأعطال', 'قيد التطوير', '', '');
+        const renderInventory = () => elContent.innerHTML = EmptyState('المخزون', 'قيد التطوير', '', '');
+        const renderSettings = () => elContent.innerHTML = EmptyState('الإعدادات', 'قيد التطوير', '', '');
+        const renderAudit = () => {
+            const items = Object.values(dataCache.auditLogs).sort((a,b)=> new Date(b.timestamp) - new Date(a.timestamp));
+            let html = `<div class="bg-surface rounded-lg border border-border overflow-x-auto"><table class="w-full text-sm text-right"><thead class="bg-gray-50 text-secondary"><tr><th class="p-4">التاريخ</th><th class="p-4">المستخدم</th><th class="p-4">العملية</th><th class="p-4">التفاصيل</th></tr></thead><tbody>`;
+            items.forEach(log => {
+                html += `<tr class="border-t border-border hover:bg-gray-50"><td class="p-4" dir="ltr">${formatDate(log.timestamp)}</td><td class="p-4">${log.userName}</td><td class="p-4">${log.action}</td><td class="p-4">${log.details}</td></tr>`;
+            });
+            html += `</tbody></table></div>`;
+            elContent.innerHTML = html;
+        };
+
+        // Routing
+        window.addEventListener('hashchange', () => {
+            if(currentUser) renderPage(window.location.hash || '#dashboard');
+        });
+
+        // Auth Logic
+        const checkSuperAdmin = async (user) => {
+            if (user.email === SUPER_ADMIN_EMAIL) {
+                // Check if exists
+                let exists = false;
+                let uidStr = user.uid;
+                Object.entries(dataCache.users).forEach(([k, v]) => {
+                    if (v.email === SUPER_ADMIN_EMAIL) { exists = true; uidStr = k; }
+                });
+                if (!exists) {
+                    await set(ref(db, 'users/' + user.uid), {
+                        email: user.email,
+                        name: 'المدير العام',
+                        role: 'super_admin',
+                        isSuperAdmin: true,
+                        status: 'active',
+                        createdAt: new Date().toISOString()
+                    });
+                }
+            }
+        };
+
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                currentUser = user;
+                elLogin.classList.add('hidden');
+                elApp.classList.remove('hidden');
+                document.getElementById('topbar-user-name').textContent = user.email;
+                document.getElementById('current-user-name').textContent = user.email.split('@')[0];
+                document.getElementById('user-avatar-initial').textContent = user.email.charAt(0).toUpperCase();
+                
+                setupDBListeners();
+                
+                // wait slight delay for data
+                setTimeout(async () => {
+                    await checkSuperAdmin(user);
+                    renderPage(window.location.hash || '#dashboard');
+                }, 500);
+            } else {
+                currentUser = null;
+                elApp.classList.add('hidden');
+                elLogin.classList.remove('hidden');
+            }
+        });
+
+        // Login Handlers
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const errEl = document.getElementById('login-error');
+            errEl.classList.add('hidden');
+            try {
+                await signInWithEmailAndPassword(auth, document.getElementById('login-email').value, document.getElementById('login-password').value);
+                showToast('تم تسجيل الدخول بنجاح');
+            } catch (error) {
+                errEl.textContent = 'فشل تسجيل الدخول. تأكد من البيانات.';
+                errEl.classList.remove('hidden');
+            }
+        });
+
+        document.getElementById('btn-google-login').addEventListener('click', async () => {
+            const errEl = document.getElementById('login-error');
+            errEl.classList.add('hidden');
+            try {
+                const provider = new GoogleAuthProvider();
+                await signInWithPopup(auth, provider);
+                showToast('تم تسجيل الدخول بنجاح');
+            } catch (error) {
+                errEl.textContent = 'فشل تسجيل الدخول عبر جوجل.';
+                errEl.classList.remove('hidden');
+            }
+        });
+
+        document.getElementById('btn-logout').addEventListener('click', async () => {
+            await signOut(auth);
+            showToast('تم تسجيل الخروج');
+        });
+
+    </script>
+</body>
+</html>
